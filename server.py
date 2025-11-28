@@ -1,6 +1,7 @@
 import password_changer as pc
 
-import os, sys
+import os, sys, re
+import argparse as ap
 import random as r
 import string as s
 import socket as st
@@ -21,12 +22,19 @@ class PasswordGenerator:
         self.__keywords_list = keywords
         self.__need_symbols = is_symbols_need
 
-    def generateKey(self):
-        if os.path.exists("test_key.dat"):
-            with open("test_key.dat", "wb") as key_file:
-                key_file.write(ctf.Fernet.generate_key())
+    def readKey(self, filename: str):
+        if os.path.exists(filename):
+            with open(filename, "rb") as key_file:
+                return key_file.read()
 
-        return
+        raise FileNotFoundError("Key file not found!")
+
+    def generateKey(self, filename: str):
+        if not os.path.exists(filename):
+            key = ctf.Fernet.generate_key()
+
+            with open(filename, "wb") as key_file:
+                key_file.write(key)
 
     def generate_password(self, password_len: int):
         if password_len < 8:
@@ -77,7 +85,7 @@ class PasswordServer:
     def get_pin_code(self):
         pin_code = os.getenv("PCH_PIN_CODE").encode()
 
-        pin = self.__client.recv(1024)
+        pin = self.__client.recv(4096)
 
         if pin == h.sha512(pin_code).digest():
             return True
@@ -115,22 +123,47 @@ class PasswordServer:
 
 
 def main():
-    p_generator = PasswordGenerator(True, ["fuck", "you", "anakin"])
-    p_generator.generateKey()
+    args = ConfigureArgParser()
 
     p_user = os.getenv("PCH_USER")
     wait_time = int(os.getenv("WAIT_TIME"))
     p_max_len = int(os.getenv("MAX_PASSWORD_LEN"))
+    key_words = list(map(lambda x: x.strip(), re.split(r",\s*", os.getenv("KEYWORDS"))))
+
+    p_generator = PasswordGenerator(True, key_words)
+
+    key = None
+    key_file_name = os.getenv("KEY_FILE_NAME") + ".key"
+
+    if args.generate_key:
+        key = p_generator.generateKey(key_file_name)
+        return
+
+    else:
+        key = p_generator.readKey(key_file_name)
 
     while True:
         password = p_generator.generate_password(r.randint(8, p_max_len))
         changePassword(p_user, password)
 
         with PasswordServer("", 8080, True) as client:
+            client.encryptKey = key
+
             if client.get_pin_code():
                 client.send_password(password)
+            else:
+                client.sendall("i_pc".encode())
 
         t.sleep(wait_time)
+
+
+def ConfigureArgParser():
+    parser = ap.ArgumentParser("password_changer")
+    parser.add_argument("-gk", "--generate_key", action="store_true")
+
+    args = parser.parse_args()
+
+    return args
 
 
 def changePassword(p_user, password):
