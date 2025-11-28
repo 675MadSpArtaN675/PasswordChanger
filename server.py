@@ -128,7 +128,9 @@ def main():
     p_user = os.getenv("PCH_USER")
     wait_time = int(os.getenv("WAIT_TIME"))
     p_max_len = int(os.getenv("MAX_PASSWORD_LEN"))
-    key_words = list(map(lambda x: x.strip(), re.split(r",\s*", os.getenv("KEYWORDS"))))
+    key_words = list(
+        map(lambda x: x.strip(), re.split(r",?\s*", os.getenv("KEYWORDS")))
+    )
 
     p_generator = PasswordGenerator(True, key_words)
 
