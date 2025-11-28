@@ -15,11 +15,17 @@ KEY_FILE_NAME=<Название файла без формата>
 KEYWORDS=... <Список слов, которые разделены пробелами или запятой>
 
 Пример настроек:
-'''
+
+```
 PCH_USER=IVAN
+
 PCH_PIN_CODE=0913
+
 MAX_PASSWORD_LEN=16
+
 WAIT_TIME=5
+
 KEY_FILE_NAME=password_key
+
 KEYWORDS=Lodik, Kirill, Asshole, Artyom, DoggyStyle, Fick, Fuck, MADARA
-'''
+```
