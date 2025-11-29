@@ -181,7 +181,7 @@ class ChangerService:
         changer_thread.start()
 
         while self.__is_service_launch:
-            with PasswordServer("192.168.0.104", 8081, True) as client:
+            with PasswordServer("192.168.0.104", 8080, True) as client:
                 client.encryptKey = key
 
                 if client.get_pin_code():
