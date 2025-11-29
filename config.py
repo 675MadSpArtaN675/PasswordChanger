@@ -1,0 +1,7 @@
+PCH_USER = "IVAN"
+PCH_PATH_TO_KEY = "C:\\Users\\Public\\Documents"
+PCH_PIN_CODE = "7524"
+MAX_PASSWORD_LEN = 16
+WAIT_TIME = 60
+KEY_FILE_NAME = "password_key"
+KEYWORDS = []

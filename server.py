@@ -1,6 +1,7 @@
 import password_changer as pc
 
-import os, sys, re
+import os, sys
+import threading as th
 import argparse as ap
 import random as r
 import string as s
@@ -9,9 +10,8 @@ import hashlib as h
 import time as t
 
 import cryptography.fernet as ctf
-import dotenv as de
 
-de.load_dotenv()
+from config import *
 
 
 class PasswordGenerator:
@@ -35,6 +35,8 @@ class PasswordGenerator:
 
             with open(filename, "wb") as key_file:
                 key_file.write(key)
+
+            return key
 
     def generate_password(self, password_len: int):
         if password_len < 8:
@@ -83,7 +85,7 @@ class PasswordServer:
         self.__is_block_errors = block_errors
 
     def get_pin_code(self):
-        pin_code = os.getenv("PCH_PIN_CODE").encode()
+        pin_code = PCH_PIN_CODE.encode()
 
         pin = self.__client.recv(4096)
 
@@ -122,59 +124,93 @@ class PasswordServer:
         return self.__is_block_errors
 
 
-def main():
-    args = ConfigureArgParser()
+class ChangerService:
+    __password: str = None
+    __is_service_launch: bool = False
 
-    p_user = os.getenv("PCH_USER")
-    wait_time = int(os.getenv("WAIT_TIME"))
-    p_max_len = int(os.getenv("MAX_PASSWORD_LEN"))
-    key_words = list(
-        map(lambda x: x.strip(), re.split(r",?\s*", os.getenv("KEYWORDS")))
-    )
+    def Launch(self):
+        args = self.__ConfigureArgParser()
 
-    p_generator = PasswordGenerator(True, key_words)
+        p_user = PCH_USER
+        key_words = list(map(lambda x: x.strip(), KEYWORDS))
 
-    key = None
-    key_file_name = os.getenv("KEY_FILE_NAME") + ".key"
+        p_generator = PasswordGenerator(True, key_words)
 
-    if args.generate_key:
-        key = p_generator.generateKey(key_file_name)
-        return
+        key = None
+        key_file_name = PCH_PATH_TO_KEY + "\\" + KEY_FILE_NAME + ".key"
 
-    else:
-        key = p_generator.readKey(key_file_name)
+        if args.generate_key or not os.path.exists(key_file_name):
+            key = p_generator.generateKey(key_file_name)
+            return
 
-    while True:
-        password = p_generator.generate_password(r.randint(8, p_max_len))
-        changePassword(p_user, password)
+        else:
+            key = p_generator.readKey(key_file_name)
 
-        with PasswordServer("", 8080, True) as client:
-            client.encryptKey = key
+        self._program_cycle(p_user, p_generator, key)
 
-            if client.get_pin_code():
-                client.send_password(password)
-            else:
-                client.sendall("i_pc".encode())
+    def Stop(self):
+        self.__is_service_launch = False
 
-        t.sleep(wait_time)
+    def _replacePassword(
+        self, username: str, p_generator: PasswordGenerator, key: bytes, lock: th.Lock
+    ):
+        p_max_len = int(MAX_PASSWORD_LEN)
+        wait_time = int(WAIT_TIME)
 
+        while self.__is_service_launch:
+            lock.acquire()
+            self.__password = p_generator.generate_password(r.randint(8, p_max_len))
+            self.__changePassword(username, self.__password, key)
+            lock.release()
 
-def ConfigureArgParser():
-    parser = ap.ArgumentParser("password_changer")
-    parser.add_argument("-gk", "--generate_key", action="store_true")
+            t.sleep(wait_time)
 
-    args = parser.parse_args()
+    def _program_cycle(
+        self,
+        username: str,
+        p_generator: PasswordGenerator,
+        key: bytes,
+    ):
+        self.__is_service_launch = True
 
-    return args
+        lock = th.Lock()
 
+        changer_thread = th.Thread(
+            target=self._replacePassword, args=(username, p_generator, key, lock)
+        )
+        changer_thread.start()
 
-def changePassword(p_user, password):
-    if sys.platform == "win32":
-        pc.ChangePasswordWindows(p_user, password)
+        while self.__is_service_launch:
+            with PasswordServer("192.168.0.104", 8081, True) as client:
+                client.encryptKey = key
 
-    else:
-        pc.ChangePasswordLinux(p_user, password)
+                if client.get_pin_code():
+                    lock.acquire()
+                    if self.__password is not None:
+                        client.send_password(self.__password)
+                    lock.release()
+                else:
+                    client.sendall("i_pc".encode())
+
+        changer_thread.join()
+
+    def __ConfigureArgParser(self):
+        parser = ap.ArgumentParser("password_changer")
+        parser.add_argument("-gk", "--generate_key", action="store_true")
+
+        args = parser.parse_args()
+
+        return args
+
+    def __changePassword(self, p_user, password, key):
+        pass_history_file = PCH_PATH_TO_KEY + "\\" + "ph.dat"
+
+        if sys.platform == "win32":
+            pc.ChangePasswordWindows(p_user, password, pass_history_file, key)
+
+        else:
+            pc.ChangePasswordLinux(p_user, password)
 
 
 if __name__ == "__main__":
-    main()
+    ChangerService().Launch()

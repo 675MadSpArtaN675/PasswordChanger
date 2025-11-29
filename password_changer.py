@@ -1,5 +1,8 @@
 import subprocess, os
 
+import win32net as w32n
+import cryptography.fernet as ctf
+
 
 def WritePassword(process: subprocess.Popen, password: str):
     try:
@@ -47,5 +50,26 @@ def ChangePasswordLinux(
     return
 
 
-def ChangePasswordWindows(user: str, password: str):
-    os.system(f"net user {user} {password}")
+def ChangePasswordWindows(user: str, password: str, filepath: str, key: bytes):
+    cryptor = ctf.Fernet(key)
+
+    old_password = __read_password(filepath, cryptor)
+
+    if user and password and old_password:
+        w32n.NetUserChangePassword(None, user, old_password, password)
+
+        with open(filepath, "wb", encoding="utf-8") as file:
+            password = cryptor.encrypt(password.encode())
+
+            file.write(password)
+
+
+def __read_password(filepath, cryptor):
+    old_password = None
+
+    if os.path.exists(filepath):
+        with open(filepath, "rb", encoding="utf-8") as file:
+            old_password = file.readline().strip()
+            old_password = cryptor.decrypt(old_password).decode()
+
+    return old_password
