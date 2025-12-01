@@ -128,6 +128,9 @@ class ChangerService:
     __password: str = None
     __is_service_launch: bool = False
 
+    def __del__(self):
+        self.SetStandartPassword()
+
     def Launch(self):
         args = self.__ConfigureArgParser()
 
@@ -148,19 +151,27 @@ class ChangerService:
 
         self._program_cycle(p_user, p_generator, key)
 
+    def SetStandartPassword(self):
+        self.__changePassword(PCH_USER, "1234qwer", self.__password)
+
+        return
+
     def Stop(self):
         self.__is_service_launch = False
 
     def _replacePassword(
-        self, username: str, p_generator: PasswordGenerator, key: bytes, lock: th.Lock
+        self, username: str, p_generator: PasswordGenerator, lock: th.Lock
     ):
         p_max_len = int(MAX_PASSWORD_LEN)
         wait_time = int(WAIT_TIME)
 
         while self.__is_service_launch:
             lock.acquire()
+            global YOUR_LAST_PASSWORD
             self.__password = p_generator.generate_password(r.randint(8, p_max_len))
-            self.__changePassword(username, self.__password, key)
+            self.__changePassword(username, self.__password, YOUR_LAST_PASSWORD)
+
+            YOUR_LAST_PASSWORD = self.__password
             lock.release()
 
             t.sleep(wait_time)
@@ -176,12 +187,12 @@ class ChangerService:
         lock = th.Lock()
 
         changer_thread = th.Thread(
-            target=self._replacePassword, args=(username, p_generator, key, lock)
+            target=self._replacePassword, args=(username, p_generator, lock)
         )
         changer_thread.start()
 
         while self.__is_service_launch:
-            with PasswordServer("192.168.0.104", 8080, True) as client:
+            with PasswordServer("0.0.0.0", 8080, True) as client:
                 client.encryptKey = key
 
                 if client.get_pin_code():
@@ -202,11 +213,9 @@ class ChangerService:
 
         return args
 
-    def __changePassword(self, p_user, password, key):
-        pass_history_file = PCH_PATH_TO_KEY + "\\" + "ph.dat"
-
+    def __changePassword(self, p_user, password, old_password):
         if sys.platform == "win32":
-            pc.ChangePasswordWindows(p_user, password, pass_history_file, key)
+            pc.ChangePasswordWindows(p_user, password, old_password)
 
         else:
             pc.ChangePasswordLinux(p_user, password)

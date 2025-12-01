@@ -40,7 +40,6 @@ def ChangePasswordLinux(
             + f"{new_password}\n" * 2
         )
         x = WritePassword(proc, line_to_write)
-        print(x)
 
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired as ex:
@@ -50,26 +49,6 @@ def ChangePasswordLinux(
     return
 
 
-def ChangePasswordWindows(user: str, password: str, filepath: str, key: bytes):
-    cryptor = ctf.Fernet(key)
-
-    old_password = __read_password(filepath, cryptor)
-
+def ChangePasswordWindows(user: str, password: str, old_password: str):
     if user and password and old_password:
         w32n.NetUserChangePassword(None, user, old_password, password)
-
-        with open(filepath, "wb", encoding="utf-8") as file:
-            password = cryptor.encrypt(password.encode())
-
-            file.write(password)
-
-
-def __read_password(filepath, cryptor):
-    old_password = None
-
-    if os.path.exists(filepath):
-        with open(filepath, "rb", encoding="utf-8") as file:
-            old_password = file.readline().strip()
-            old_password = cryptor.decrypt(old_password).decode()
-
-    return old_password

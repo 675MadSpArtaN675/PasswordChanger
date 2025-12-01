@@ -12,20 +12,29 @@ def main():
 
     pin_code = pyip.inputRegex(r"\d{4}", prompt="PIN: ", limit=4).strip()
 
-    is_errored = False
-    with s.create_connection(("192.168.0.104", 8080)) as server:
-        server.settimeout(10)
+    for i in range(1, 50):
+        try:
+            ip_address = f"192.168.0.{i + 100}"
+            print(f"Проверка ip: {ip_address}")
 
-        server.send(h.sha512(pin_code.encode()).digest())
-        message = server.recv(4096)
+            is_errored = False
+            with s.create_connection((ip_address, 8080)) as server:
+                server.settimeout(10)
 
-        if message == "i_pc":
-            is_errored = True
+                server.send(h.sha512(pin_code.encode()).digest())
+                message = server.recv(4096)
 
-        if not is_errored and bool(key) and bool(message):
-            password = ctf.Fernet(key).decrypt(message).decode()
+                if message == "i_pc":
+                    is_errored = True
 
-    print_password(password, is_errored)
+                if not is_errored and bool(key) and bool(message):
+                    password = ctf.Fernet(key).decrypt(message).decode()
+
+            print_password(password, is_errored)
+
+        except ConnectionRefusedError | TimeoutError:
+            if password is not None:
+                return
 
 
 def print_password(password, error):
